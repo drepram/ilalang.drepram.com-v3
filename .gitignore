@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.env
+dist/
+coverage/
+*.tsbuildinfo
+.agents/
+.env.example
+.env
+skills-lock.json
