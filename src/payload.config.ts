@@ -14,6 +14,7 @@ export default buildConfig({
   collections: [Images, Authors, Works, Users],
   admin: {
     user: Users.slug,
+    suppressHydrationWarning: true,
   },
   secret: env.payloadSecret,
   db: vercelPostgresAdapter({

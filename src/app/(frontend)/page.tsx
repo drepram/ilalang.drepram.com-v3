@@ -1,11 +1,15 @@
-import Image from "next/image";
 import Link from "next/link";
 import { fetchAllAuthors, fetchFeaturedWorks } from "@/utils/payload-cache";
+import { getAuthorExcerpt } from "@/utils/author-summary";
 
 export const revalidate = 300;
 
 export default async function HomePage() {
   const [authors, works] = await Promise.all([fetchAllAuthors(), fetchFeaturedWorks()]);
+  const legacyAuthors = authors.docs.filter((author: any) => Boolean(author.legacyProfilePicture));
+  const modernAuthors = authors.docs.filter((author: any) => !author.legacyProfilePicture);
+  const orderedAuthors = [...legacyAuthors, ...modernAuthors];
+  const hasOddModernAuthorCount = modernAuthors.length % 2 === 1;
 
   return (
     <section className="mx-auto max-w-6xl px-1 sm:px-4">
@@ -28,35 +32,59 @@ export default async function HomePage() {
         </div>
         <div className="py-8 sm:py-12">
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-8">
-            {authors.docs.map((author: any) => (
-            <div key={author.id} className="w-full">
-              <div className="editor-card overflow-hidden h-full">
-                {author.legacyProfilePicture ? (
-                  <Link href={`/authors/${author.slug}`} className="block" aria-label={`Link to ${author.name}`}>
-                    <Image
-                      src={author.legacyProfilePicture}
-                      alt={author.name}
-                      width={960}
-                      height={720}
-                      unoptimized
-                      className="h-[220px] w-full object-cover object-center sm:h-[280px] md:h-36 lg:h-48"
-                      loading="lazy"
-                    />
-                  </Link>
-                ) : null}
-                <div className="p-5 sm:p-6">
-                  <h3 className="mb-3 text-[1.75rem] font-bold leading-[1.08] tracking-tight text-[#2f241c] sm:text-2xl">
-                    <Link href={`/authors/${author.slug}`} aria-label={`Link to ${author.name}`}>
-                      {author.name}
-                    </Link>
-                  </h3>
-                  <p className="prose mb-0 max-w-none muted-text text-base leading-7 sm:text-[1.05rem] sm:leading-8">
-                    {author.description || "Profil penulis di ilalang."}
+            {orderedAuthors.map((author: any) => {
+              const isLegacyAuthor = Boolean(author.legacyProfilePicture);
+              const authorExcerpt = getAuthorExcerpt(author);
+
+              if (isLegacyAuthor) {
+                return (
+                  <div key={author.id} className="w-full">
+                    <div className="editor-card h-full overflow-hidden">
+                      <Link href={`/authors/${author.slug}`} className="block" aria-label={`Link to ${author.name}`}>
+                        <img
+                          src={author.legacyProfilePicture}
+                          alt={author.name}
+                          className="h-[220px] w-full object-cover object-center sm:h-[280px] md:h-36 lg:h-48"
+                          loading="lazy"
+                        />
+                      </Link>
+                      <div className="p-5 sm:p-6">
+                        <h3 className="mb-3 text-[1.75rem] font-bold leading-[1.08] tracking-tight text-[#2f241c] sm:text-2xl">
+                          <Link href={`/authors/${author.slug}`} aria-label={`Link to ${author.name}`}>
+                            {author.name}
+                          </Link>
+                        </h3>
+                        <p className="prose mb-0 max-w-none muted-text text-base leading-7 sm:text-[1.05rem] sm:leading-8">
+                          {author.description || "Profil penulis di ilalang."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              const modernAuthorIndex = modernAuthors.findIndex((item: any) => item.id === author.id);
+              const isLastOddCard =
+                hasOddModernAuthorCount && modernAuthorIndex === modernAuthors.length - 1;
+
+              return (
+                <article
+                  key={author.id}
+                  className={`editor-card min-h-[10.5rem] p-6 sm:min-h-[12rem] sm:p-7 ${isLastOddCard ? "md:col-span-2 md:mx-auto md:max-w-[30rem]" : ""}`}
+                >
+                  <div className="border-b border-[#e5d6bf] pb-5">
+                    <h3 className="mb-3 text-[1.75rem] font-bold leading-[1.08] tracking-tight text-[#2f241c] sm:text-2xl">
+                      <Link href={`/authors/${author.slug}`} aria-label={`Link to ${author.name}`}>
+                        {author.name}
+                      </Link>
+                    </h3>
+                  </div>
+                  <p className="prose mb-0 mt-5 max-w-none muted-text text-base leading-7 sm:text-[1.05rem] sm:leading-8">
+                    {authorExcerpt}
                   </p>
-                </div>
-              </div>
-            </div>
-          ))}
+                </article>
+              );
+            })}
           </div>
         </div>
       </div>

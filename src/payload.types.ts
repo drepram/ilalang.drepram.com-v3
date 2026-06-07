@@ -89,7 +89,7 @@ export interface Author {
   id: string;
   name: string;
   slug?: string | null;
-  legacyId: string;
+  legacyId?: string | null;
   avatar?: (string | null) | Image;
   legacyProfilePicture?: string | null;
   yearOfLife?: string | null;
