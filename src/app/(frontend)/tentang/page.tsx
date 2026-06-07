@@ -1,5 +1,7 @@
 import Image from "next/image";
 
+const logoUrl = "https://media.kabe.drepram.com/logo.png";
+
 export const revalidate = 300;
 
 export default function TentangPage() {
@@ -15,7 +17,7 @@ export default function TentangPage() {
           <div className="relative overflow-hidden rounded-[1.75rem] border border-[#c9b18a] bg-gradient-to-br from-[#fff9ec] via-[#f8e9c6] to-[#ecd9b1] p-4 shadow-[0_18px_42px_rgba(50,34,16,0.22)]">
             <div className="rounded-2xl border border-[#f8efdc] bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.85),rgba(246,228,188,0.72)_55%,rgba(214,180,121,0.6))] p-4">
               <Image
-                src="/assets/logo.png"
+                src={logoUrl}
                 alt="Logo ilalang"
                 width={144}
                 height={144}
