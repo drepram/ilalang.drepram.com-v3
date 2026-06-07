@@ -16,7 +16,8 @@
     "migrate": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload migrate",
     "migrate:create": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload migrate:create",
     "migrate:status": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload migrate:status",
-    "import:ilalang": "tsx seed/import-ilalang.ts"
+    "import:ilalang": "tsx seed/import-ilalang.ts",
+    "normalize:legacy-works": "tsx seed/normalize-legacy-works.ts"
   },
   "dependencies": {
     "@payloadcms/db-vercel-postgres": "3.17.1",

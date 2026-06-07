@@ -2,10 +2,10 @@ import "dotenv/config";
 import fs from "node:fs";
 import payload from "payload";
 import { parse } from "csv-parse/sync";
-import type { SerializedEditorState } from "@payloadcms/richtext-lexical/lexical";
 import config from "@payload-config";
 import { env } from "@/utils/env";
 import { formatSlug } from "@/utils/slug";
+import { createLegacyRichText, createParagraphRichText, parseLegacyWorkContent } from "@/utils/work-content";
 
 type AuthorCsvRow = {
   id: string;
@@ -36,40 +36,10 @@ const readCsv = <T>(filePath: string): T[] => {
   }) as T[];
 };
 
-const createParagraphRichText = (text: string): SerializedEditorState => ({
-  root: {
-    type: "root",
-    version: 1,
-    direction: "ltr",
-    format: "",
-    indent: 0,
-    children: (text || "")
-      .split(/\n\s*\n/g)
-      .map((paragraph) => paragraph.trim())
-      .filter(Boolean)
-      .map((paragraph) => ({
-        type: "paragraph",
-        version: 1,
-        children: [
-          {
-            type: "text",
-            version: 1,
-            text: paragraph,
-          },
-        ],
-      })),
-  },
-});
-
 const parseBoolean = (value: string) => value === "true" || value === "t";
 
 const sanitizeImportedContent = (content: string) =>
   content.replace(/<br\s*\/?>/gi, "\n").trim();
-
-const extractSource = (content: string) => {
-  const match = content.match(/\*\*Sumber\*\*:\s*(.+)$/im);
-  return match?.[1]?.trim() ?? "";
-};
 
 const createImportedWorkSlug = (title: string, legacyId: string) => {
   const base = formatSlug(title) || "work";
@@ -119,7 +89,7 @@ const run = async () => {
     if (!authorId) continue;
 
     const content = sanitizeImportedContent(row.content || "");
-    const source = extractSource(content);
+    const parsedContent = parseLegacyWorkContent(content);
 
     const existing = await payload.find({
       collection: "works",
@@ -132,8 +102,10 @@ const run = async () => {
       slug: createImportedWorkSlug(row.title, row.id),
       legacyId: row.id,
       author: authorId,
-      content: createParagraphRichText(content),
-      source,
+      content: createLegacyRichText(parsedContent.body),
+      source: parsedContent.source,
+      translator: parsedContent.translator,
+      footnotes: parsedContent.footnotes,
       showOnHome: parseBoolean(row.highlighted),
       publishedAt: row.createdAt,
       legacyCreatedAt: row.createdAt,

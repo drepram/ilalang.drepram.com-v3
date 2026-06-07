@@ -88,6 +88,26 @@ export const Works: CollectionConfig = {
       type: "text",
     },
     {
+      name: "translator",
+      type: "text",
+    },
+    {
+      name: "footnotes",
+      type: "array",
+      fields: [
+        {
+          name: "label",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "value",
+          type: "text",
+          required: true,
+        },
+      ],
+    },
+    {
       name: "showOnHome",
       type: "checkbox",
       defaultValue: false,
