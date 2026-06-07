@@ -19,19 +19,6 @@ export async function generateStaticParams() {
   return works.docs.map((work: any) => ({ slug: work.slug }));
 }
 
-const alignmentClass = (align?: string) => {
-  switch ((align || "").toLowerCase()) {
-    case "center":
-      return "text-center";
-    case "right":
-      return "text-right";
-    case "justify":
-      return "text-justify";
-    default:
-      return "text-left";
-  }
-};
-
 export default async function WorkPage({ params }: { params: Params }) {
   const { slug } = await params;
   const result = await fetchWorkBySlug(slug);
@@ -42,7 +29,16 @@ export default async function WorkPage({ params }: { params: Params }) {
   const author = typeof work.author === "object" ? work.author : null;
   const rawText = richTextToRawText(work.content);
   const parsedLegacyContent = parseLegacyWorkContent(rawText);
-  const renderAsLegacyMarkup = parsedLegacyContent.hasLegacyMarkup;
+  const hasStructuredFormatting = Boolean(
+    work.content?.root?.children?.some(
+      (node: any) =>
+        (typeof node?.format === "string" && node.format !== "") ||
+        node?.type === "list" ||
+        node?.type === "quote" ||
+        node?.type === "horizontalrule",
+    ),
+  );
+  const renderAsLegacyMarkup = parsedLegacyContent.hasLegacyMarkup && !hasStructuredFormatting;
   const legacyRichText = renderAsLegacyMarkup
     ? createLegacyRichText(parsedLegacyContent.body)
     : null;
