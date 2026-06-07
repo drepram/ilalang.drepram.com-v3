@@ -38,6 +38,11 @@ type SerializedElementNodeLike = SerializedLexicalNodeLike & {
   indent: number;
 };
 
+type LegacyAlignedSegment = {
+  format: SerializedElementNodeLike["format"];
+  text: string;
+};
+
 const textFromNode = (node: LexicalNode): string => {
   if (node.type === "linebreak") return "\n";
   if (typeof node.text === "string") return node.text;
@@ -45,6 +50,10 @@ const textFromNode = (node: LexicalNode): string => {
 };
 
 const normalizeLineEndings = (value: string) => value.replace(/\r\n?/g, "\n");
+const normalizeLegacyMarkup = (value: string) =>
+  value.replace(/(<(?:pre|div)\s+align=)[“”"]([^“”"]+)[“”"]/gi, '$1"$2"');
+const normalizeLegacyLineEndings = (value: string) =>
+  normalizeLegacyMarkup(normalizeLineEndings(value).replace(/\\r\\n?/g, "\n").replace(/\\n/g, "\n"));
 
 const trimBlankEdges = (value: string) => value.replace(/^\s*\n+|\n+\s*$/g, "").trim();
 
@@ -54,6 +63,14 @@ const parseFootnoteLine = (line: string): WorkFootnote | null => {
     return {
       label: boldLabelMatch[1].trim(),
       value: boldLabelMatch[2].trim(),
+    };
+  }
+
+  const htmlBoldLabelMatch = line.match(/^\s*<(?:strong|b)>(.+?)<\/(?:strong|b)>\s*:?\s*(.+?)\s*$/i);
+  if (htmlBoldLabelMatch) {
+    return {
+      label: htmlBoldLabelMatch[1].trim().replace(/:$/, ""),
+      value: htmlBoldLabelMatch[2].trim(),
     };
   }
 
@@ -137,17 +154,25 @@ const createQuoteNode = (
 const createLinkNode = (
   url: string,
   children: SerializedLexicalNodeLike[],
-): SerializedElementNodeLike & { type: "link"; url: string; rel: string | null; target: string | null; title: string | null } => ({
+): SerializedElementNodeLike & {
+  type: "link";
+  fields: {
+    linkType: "custom";
+    url: string;
+    newTab: boolean;
+  };
+} => ({
   type: "link",
   version: 1,
   children,
   direction: null,
   format: "",
   indent: 0,
-  url,
-  rel: null,
-  target: null,
-  title: null,
+  fields: {
+    linkType: "custom",
+    url,
+    newTab: false,
+  },
 });
 
 const createListItemNode = (
@@ -196,6 +221,122 @@ const normalizeAlignment = (value?: string): SerializedElementNodeLike["format"]
     default:
       return "";
   }
+};
+
+const parseLegacyAlignedSegments = (
+  text: string,
+  baseFormat: SerializedElementNodeLike["format"] = "",
+): LegacyAlignedSegment[] => {
+  const lines = normalizeLegacyLineEndings(text).split("\n");
+  const formatStack: SerializedElementNodeLike["format"][] = [baseFormat];
+  const segments: LegacyAlignedSegment[] = [];
+  let buffer: string[] = [];
+
+  const flush = () => {
+    if (buffer.length === 0) return;
+
+    const joined = buffer.join("\n").replace(/^\n+|\n+$/g, "");
+    if (joined) {
+      segments.push({
+        format: formatStack[formatStack.length - 1] ?? "",
+        text: joined,
+      });
+    }
+
+    buffer = [];
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    const sameLineMatch = line.match(/^<(pre|div)(?:\s+align="(center|right|justify|left)")?>([\s\S]*?)<\/\1>$/i);
+    if (sameLineMatch) {
+      flush();
+      const inner = sameLineMatch[3].replace(/^\n+|\n+$/g, "");
+      if (inner) {
+        segments.push({
+          format: normalizeAlignment(sameLineMatch[2]),
+          text: inner,
+        });
+      }
+      continue;
+    }
+
+    const openMatch = line.match(/^<(pre|div)(?:\s+align="(center|right|justify|left)")?>$/i);
+    if (openMatch) {
+      flush();
+      formatStack.push(normalizeAlignment(openMatch[2]));
+      continue;
+    }
+
+    if (line.match(/^<\/(pre|div)>$/i)) {
+      flush();
+      if (formatStack.length > 1) {
+        formatStack.pop();
+      }
+      continue;
+    }
+
+    buffer.push(rawLine);
+  }
+
+  flush();
+
+  return segments;
+};
+
+const collectLegacyBlockLines = (
+  lines: string[],
+  startIndex: number,
+  tagName: "pre" | "div",
+) => {
+  const blockLines: string[] = [];
+  let index = startIndex + 1;
+  let depth = 1;
+
+  const sameLineTag = new RegExp(
+    `^<${tagName}(?:\\s+align="(center|right|justify|left)")?>[\\s\\S]*<\\/${tagName}>$`,
+    "i",
+  );
+  const openTag = new RegExp(`^<${tagName}(?:\\s+align="(center|right|justify|left)")?>$`, "i");
+  const closeTag = new RegExp(`^<\\/${tagName}>$`, "i");
+
+  while (index < lines.length) {
+    const candidate = lines[index].trim();
+
+    if (sameLineTag.test(candidate)) {
+      blockLines.push(lines[index]);
+      index += 1;
+      continue;
+    }
+
+    if (openTag.test(candidate)) {
+      depth += 1;
+      blockLines.push(lines[index]);
+      index += 1;
+      continue;
+    }
+
+    if (closeTag.test(candidate)) {
+      depth -= 1;
+      if (depth === 0) {
+        index += 1;
+        break;
+      }
+
+      blockLines.push(lines[index]);
+      index += 1;
+      continue;
+    }
+
+    blockLines.push(lines[index]);
+    index += 1;
+  }
+
+  return {
+    blockText: blockLines.join("\n"),
+    nextIndex: index,
+  };
 };
 
 const formatMap: Record<string, number> = {
@@ -298,7 +439,7 @@ const blockTextToChildren = (text: string) => {
 };
 
 const parseLegacyBodyToLexical = (input: string): SerializedEditorState => {
-  const normalized = normalizeLineEndings(input).trim();
+  const normalized = normalizeLegacyLineEndings(input).trim();
   const lines = normalized ? normalized.split("\n") : [];
   const children: SerializedLexicalNodeLike[] = [];
   let index = 0;
@@ -307,6 +448,16 @@ const parseLegacyBodyToLexical = (input: string): SerializedEditorState => {
     const trimmed = text.replace(/^\n+|\n+$/g, "");
     if (!trimmed) return;
     children.push(createParagraphNode(blockTextToChildren(trimmed), format));
+  };
+
+  const pushAlignedBlock = (text: string, format: SerializedElementNodeLike["format"] = "") => {
+    const segments = parseLegacyAlignedSegments(text, format);
+
+    if (segments.length === 0) return;
+
+    segments.forEach((segment) => {
+      pushParagraph(segment.text, segment.format);
+    });
   };
 
   while (index < lines.length) {
@@ -327,14 +478,14 @@ const parseLegacyBodyToLexical = (input: string): SerializedEditorState => {
 
     const fencedPreSameLine = line.match(/^<pre(?:\s+align="(center|right|justify|left)")?>([\s\S]*?)<\/pre>$/i);
     if (fencedPreSameLine) {
-      pushParagraph(fencedPreSameLine[2], normalizeAlignment(fencedPreSameLine[1]));
+      pushAlignedBlock(fencedPreSameLine[2], normalizeAlignment(fencedPreSameLine[1]));
       index += 1;
       continue;
     }
 
     const fencedDivSameLine = line.match(/^<div(?:\s+align="(center|right|justify|left)")?>([\s\S]*?)<\/div>$/i);
     if (fencedDivSameLine) {
-      pushParagraph(fencedDivSameLine[2], normalizeAlignment(fencedDivSameLine[1]));
+      pushAlignedBlock(fencedDivSameLine[2], normalizeAlignment(fencedDivSameLine[1]));
       index += 1;
       continue;
     }
@@ -342,28 +493,18 @@ const parseLegacyBodyToLexical = (input: string): SerializedEditorState => {
     const preOpen = line.match(/^<pre(?:\s+align="(center|right|justify|left)")?>$/i);
     if (preOpen) {
       const align = normalizeAlignment(preOpen[1]);
-      const blockLines: string[] = [];
-      index += 1;
-      while (index < lines.length && !lines[index].trim().match(/^<\/pre>$/i)) {
-        blockLines.push(lines[index]);
-        index += 1;
-      }
-      if (index < lines.length) index += 1;
-      pushParagraph(blockLines.join("\n"), align);
+      const { blockText, nextIndex } = collectLegacyBlockLines(lines, index, "pre");
+      index = nextIndex;
+      pushAlignedBlock(blockText, align);
       continue;
     }
 
     const divOpen = line.match(/^<div(?:\s+align="(center|right|justify|left)")?>$/i);
     if (divOpen) {
       const align = normalizeAlignment(divOpen[1]);
-      const blockLines: string[] = [];
-      index += 1;
-      while (index < lines.length && !lines[index].trim().match(/^<\/div>$/i)) {
-        blockLines.push(lines[index]);
-        index += 1;
-      }
-      if (index < lines.length) index += 1;
-      pushParagraph(blockLines.join("\n"), align);
+      const { blockText, nextIndex } = collectLegacyBlockLines(lines, index, "div");
+      index = nextIndex;
+      pushAlignedBlock(blockText, align);
       continue;
     }
 
@@ -433,6 +574,12 @@ const parseLegacyBodyToLexical = (input: string): SerializedEditorState => {
       index += 1;
     }
 
+    if (paragraphLines.length === 0) {
+      pushParagraph(rawLine);
+      index += 1;
+      continue;
+    }
+
     pushParagraph(paragraphLines.join("\n"));
   }
 
@@ -482,7 +629,7 @@ export const createParagraphRichText = (text: string): SerializedEditorState => 
 export const createLegacyRichText = (text: string) => parseLegacyBodyToLexical(text);
 
 export const parseLegacyWorkContent = (input: string) => {
-  const normalized = normalizeLineEndings(input).replace(/<br\s*\/?>/gi, "\n");
+  const normalized = normalizeLegacyLineEndings(input).replace(/<br\s*\/?>/gi, "\n");
 
   const lines = normalized.split("\n");
   const collectedFootnotes: WorkFootnote[] = [];

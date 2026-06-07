@@ -7,8 +7,32 @@ import {
 
 type NodeTypes = DefaultNodeTypes;
 
+const alignmentClass = (format?: string) => {
+  switch ((format || "").toLowerCase()) {
+    case "center":
+      return "text-center";
+    case "right":
+      return "text-right";
+    case "justify":
+      return "text-justify";
+    default:
+      return "text-left";
+  }
+};
+
 const jsxConverters: JSXConvertersFunction<NodeTypes> = ({ defaultConverters }) => ({
   ...defaultConverters,
+  paragraph: ({ node, nodesToJSX }) => {
+    const children = nodesToJSX({
+      nodes: node.children,
+    });
+
+    return (
+      <p className={`my-0 whitespace-pre-wrap leading-[1.9] ${alignmentClass(node.format)}`}>
+        {children?.length ? children : <br />}
+      </p>
+    );
+  },
 });
 
 type Props = {

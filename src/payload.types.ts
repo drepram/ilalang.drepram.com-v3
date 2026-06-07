@@ -141,6 +141,14 @@ export interface Work {
     [k: string]: unknown;
   };
   source?: string | null;
+  translator?: string | null;
+  footnotes?:
+    | {
+        label: string;
+        value: string;
+        id?: string | null;
+      }[]
+    | null;
   showOnHome?: boolean | null;
   publishedAt?: string | null;
   /**
@@ -289,6 +297,14 @@ export interface WorksSelect<T extends boolean = true> {
   author?: T;
   content?: T;
   source?: T;
+  translator?: T;
+  footnotes?:
+    | T
+    | {
+        label?: T;
+        value?: T;
+        id?: T;
+      };
   showOnHome?: T;
   publishedAt?: T;
   legacyCreatedAt?: T;

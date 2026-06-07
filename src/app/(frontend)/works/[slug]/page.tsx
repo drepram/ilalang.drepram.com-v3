@@ -5,6 +5,7 @@ import rehypeRaw from "rehype-raw";
 import { fetchWorkBySlug, fetchWorkSlugs } from "@/utils/payload-cache";
 import RichText from "@/components/rich-text";
 import {
+  createLegacyRichText,
   parseLegacyWorkContent,
   richTextToRawText,
 } from "@/utils/work-content";
@@ -42,6 +43,9 @@ export default async function WorkPage({ params }: { params: Params }) {
   const rawText = richTextToRawText(work.content);
   const parsedLegacyContent = parseLegacyWorkContent(rawText);
   const renderAsLegacyMarkup = parsedLegacyContent.hasLegacyMarkup;
+  const legacyRichText = renderAsLegacyMarkup
+    ? createLegacyRichText(parsedLegacyContent.body)
+    : null;
   const source = work.source || parsedLegacyContent.source;
   const translator = work.translator || parsedLegacyContent.translator;
   const footnotes =
@@ -76,37 +80,7 @@ export default async function WorkPage({ params }: { params: Params }) {
         <div className="divide-y divide-[#d8c6a7] pb-6 sm:pb-8">
   <div className="prose mx-auto overflow-x-auto break-normal rounded-md pb-6 pt-6 leading-relaxed sm:pb-8 sm:pt-10">
     {renderAsLegacyMarkup ? (
-      <ReactMarkdown
-        rehypePlugins={[rehypeRaw]}
-        components={{
-          p: ({ children }) => <p className="mb-6 whitespace-pre-wrap leading-[2]">{children}</p>,
-          blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-[#b98f5a] pl-4 italic text-[#4f4134]">
-              {children}
-            </blockquote>
-          ),
-          div: ({ children, node }) => {
-            const align = typeof node?.properties?.align === "string" ? node.properties.align : undefined;
-            return <div className={`mb-6 whitespace-pre-wrap ${alignmentClass(align)}`}>{children}</div>;
-          },
-          ol: ({ children }) => <ol className="mb-6 list-decimal pl-8">{children}</ol>,
-          ul: ({ children }) => <ul className="mb-6 list-disc pl-8">{children}</ul>,
-          hr: () => <hr className="my-8 border-[#d8c6a7]" />,
-          pre: ({ children, node }) => {
-            const align = typeof node?.properties?.align === "string" ? node.properties.align : undefined;
-            return (
-              <pre
-                className={`native-poem markdown-content mb-6 whitespace-pre-wrap break-normal bg-transparent p-0 font-inherit ${alignmentClass(align)}`}
-              >
-              {children}
-              </pre>
-            );
-          },
-          code: ({ children }) => <code className="bg-transparent px-0 font-inherit">{children}</code>,
-        }}
-      >
-        {parsedLegacyContent.body}
-      </ReactMarkdown>
+      <RichText data={legacyRichText!} className="muted-text native-poem" />
     ) : (
       <RichText data={work.content} className="muted-text" />
     )}
