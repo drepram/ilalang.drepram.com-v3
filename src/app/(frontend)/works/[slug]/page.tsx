@@ -1,10 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import ReactMarkdown from "react-markdown";
-import rehypeRaw from "rehype-raw";
-import type { PluggableList } from "unified";
 import { fetchWorkBySlug, fetchWorkSlugs } from "@/utils/payload-cache";
-import { fetchLegacyPostRow } from "@/utils/legacy-content";
 import { poemTextFromRichText } from "@/utils/poem-text";
 
 type Params = Promise<{ slug: string }>;
@@ -16,8 +12,6 @@ export async function generateStaticParams() {
   return works.docs.map((work: any) => ({ slug: work.slug }));
 }
 
-const legacyMarkdownPlugins: PluggableList = [rehypeRaw];
-
 export default async function WorkPage({ params }: { params: Params }) {
   const { slug } = await params;
   const result = await fetchWorkBySlug(slug);
@@ -26,9 +20,7 @@ export default async function WorkPage({ params }: { params: Params }) {
 
   const work: any = result.docs[0];
   const author = typeof work.author === "object" ? work.author : null;
-  const legacyPost = work.legacyId ? await fetchLegacyPostRow(work.legacyId) : null;
-  const showLegacyBody = Boolean(legacyPost?.content);
-  const nativePoemText = !showLegacyBody ? poemTextFromRichText(work.content) : "";
+  const nativePoemText = poemTextFromRichText(work.content);
   const source = work.source || "";
 
   return (
@@ -57,19 +49,11 @@ export default async function WorkPage({ params }: { params: Params }) {
 
         <div className="divide-y divide-[#d8c6a7] pb-6 sm:pb-8">
   <div className="prose mx-auto overflow-x-auto whitespace-pre break-normal rounded-md pb-6 pt-6 leading-relaxed sm:pb-8 sm:pt-10">
-    {showLegacyBody ? (
-      <div className="markdown-content min-w-max">
-        <ReactMarkdown rehypePlugins={legacyMarkdownPlugins}>
-          {legacyPost?.content ?? ""}
-        </ReactMarkdown>
-      </div>
-    ) : (
-      <pre className="native-poem markdown-content whitespace-pre break-normal font-inherit">
-        {nativePoemText}
-      </pre>
-    )}
+    <pre className="native-poem markdown-content whitespace-pre break-normal font-inherit">
+      {nativePoemText}
+    </pre>
 
-    {!showLegacyBody && source ? (
+    {source ? (
       <p className="poem-source">
         <strong>Sumber:</strong> {source}
       </p>
